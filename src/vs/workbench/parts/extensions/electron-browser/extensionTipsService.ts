@@ -162,6 +162,16 @@ export class ExtensionTipsService extends Disposable implements IExtensionTipsSe
 
 			const extensionToInstall = ceintlResult.total === 1 ? ceintlResult.firstPage[0] : tagResult.total === 1 ? tagResult.firstPage[0] : null;
 			const promptType = extensionToInstall ? 'install' : 'searchMarketplace';
+			const logUserReaction = (userReaction: string) => {
+				/* __GDPR__
+					"languagePackSuggestion:popup" : {
+						"userReaction" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+						"language": { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+						"promptType": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+					}
+				*/
+				this.telemetryService.publicLog('languagePackSuggestion:popup', { userReaction, language, promptType });
+			};
 
 			this.notificationService.prompt(
 				Severity.Info,
@@ -169,14 +179,7 @@ export class ExtensionTipsService extends Disposable implements IExtensionTipsSe
 				[{
 					label: bundledTranslations[extensionToInstall ? 'install' : 'searchMarketplace'],
 					run: () => {
-						/* __GDPR__
-							"languagePackSuggestion:popup" : {
-								"userReaction" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
-								"language": { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
-								"promptType": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
-							}
-						*/
-						this.telemetryService.publicLog('languagePackSuggestion:popup', { userReaction: 'ok', language, promptType });
+						logUserReaction('ok');
 						if (extensionToInstall) {
 							this.viewletService.openViewlet(EXTENSIONS_VIEWLET_ID)
 								.then(viewlet => viewlet as IExtensionsViewlet)
@@ -203,25 +206,11 @@ export class ExtensionTipsService extends Disposable implements IExtensionTipsSe
 							JSON.stringify(languagePackSuggestionIgnoreList),
 							StorageScope.GLOBAL
 						);
-						/* __GDPR__
-							"languagePackSuggestion:popup" : {
-								"userReaction" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
-								"language": { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
-								"promptType": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
-							}
-						*/
-						this.telemetryService.publicLog('languagePackSuggestion:popup', { userReaction: 'neverShowAgain', language, promptType });
+						logUserReaction('neverShowAgain');
 					}
 				}],
 				() => {
-					/* __GDPR__
-						"languagePackSuggestion:popup" : {
-							"userReaction" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
-							"language": { "classification": "PublicNonPersonalData", "purpose": "FeatureInsight" },
-							"promptType": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
-						}
-					*/
-					this.telemetryService.publicLog('languagePackSuggestion:popup', { userReaction: 'cancelled', language, promptType });
+					logUserReaction('cancelled');
 				}
 			);
 		});
