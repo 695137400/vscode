@@ -1,0 +1,30 @@
+{
+	"pt-br": {
+		"languageName": "Portugese",
+		"searchForLanguagePacks": "pt-br placeholder: The Marketplace has extensions that can localize VS Code using the {0} language.",
+		"searchMarketplace": "Pesquisar na Loja",
+		"neverShowAgain": "Não mostrar novamente",
+		"install": "Instalar"
+	},
+	"tr": {
+		"languageName": "Turkish",
+		"searchForLanguagePacks": "tr placeholder: The Marketplace has extensions that can localize VS Code using the {0} language.",
+		"searchMarketplace": "Search Marketplace",
+		"neverShowAgain": "Don't Show Again",
+		"install": "Install"
+	},
+	"hu": {
+		"languageName": "Hungarian",
+		"searchForLanguagePacks": "hu placeholder: The Marketplace has extensions that can localize VS Code using the {0} language.",
+		"searchMarketplace": "Search Marketplace",
+		"neverShowAgain": "Don't Show Again",
+		"install": "Install"
+	},
+	"bg": {
+		"languageName": "Bulgarian",
+		"searchForLanguagePacks": "bg placeholder: The Marketplace has extensions that can localize VS Code using the {0} language.",
+		"searchMarketplace": "Search Marketplace",
+		"neverShowAgain": "Don't Show Again",
+		"install": "Install"
+	}
+}

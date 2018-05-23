@@ -21,7 +21,7 @@ import Severity from 'vs/base/common/severity';
 import { IWorkspaceContextService, IWorkspaceFolder, IWorkspace, IWorkspaceFoldersChangeEvent, WorkbenchState } from 'vs/platform/workspace/common/workspace';
 import { Schemas } from 'vs/base/common/network';
 import { IFileService } from 'vs/platform/files/common/files';
-import { IExtensionsConfiguration, ConfigurationKey, ShowRecommendationsOnlyOnDemandKey, IExtensionsViewlet } from 'vs/workbench/parts/extensions/common/extensions';
+import { IExtensionsConfiguration, ConfigurationKey, ShowRecommendationsOnlyOnDemandKey, IExtensionsViewlet, VIEWLET_ID as EXTENSIONS_VIEWLET_ID } from 'vs/workbench/parts/extensions/common/extensions';
 import { IConfigurationService, ConfigurationTarget } from 'vs/platform/configuration/common/configuration';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import * as pfs from 'vs/base/node/pfs';
@@ -34,9 +34,10 @@ import { getHashedRemotesFromUri } from 'vs/workbench/parts/stats/node/workspace
 import { IRequestService } from 'vs/platform/request/node/request';
 import { asJson } from 'vs/base/node/request';
 import { isNumber } from 'vs/base/common/types';
-import { language, LANGUAGE_DEFAULT } from 'vs/base/common/platform';
+import { language, LANGUAGE_DEFAULT, locale } from 'vs/base/common/platform';
 import { IViewletService } from 'vs/workbench/services/viewlet/browser/viewlet';
 import { INotificationService } from 'vs/platform/notification/common/notification';
+import minimalTransations from 'vs/platform/node/minimalTranslations';
 
 interface IExtensionsContent {
 	recommendations: string[];
@@ -133,85 +134,96 @@ export class ExtensionTipsService extends Disposable implements IExtensionTipsSe
 	}
 
 	private getLanguageExtensionRecommendations() {
-		const config = this.configurationService.getValue<IExtensionsConfiguration>(ConfigurationKey);
+		const bundledTranslations = minimalTransations[locale];
 		const languagePackSuggestionIgnoreList = <string[]>JSON.parse(this.storageService.get
 			('extensionsAssistant/languagePackSuggestionIgnore', StorageScope.GLOBAL, '[]'));
 
 		if (!language
-			|| language === LANGUAGE_DEFAULT
+			|| language !== LANGUAGE_DEFAULT
+			|| language === locale
 			|| coreLanguages.some(x => language === x || language.indexOf(x + '-') === 0)
-			|| config.ignoreRecommendations
-			|| config.showRecommendationsOnlyOnDemand
-			|| languagePackSuggestionIgnoreList.indexOf(language) > -1) {
+			|| languagePackSuggestionIgnoreList.indexOf(language) > -1
+			|| !bundledTranslations
+			|| !bundledTranslations['languageName']
+			|| !bundledTranslations['searchForLanguagePacks']
+			|| !bundledTranslations['searchMarketplace']
+			|| !bundledTranslations['neverShowAgain']
+			|| !bundledTranslations['install']) {
 			return;
 		}
 
-		this.extensionsService.getInstalled(LocalExtensionType.User).then(locals => {
-			for (var i = 0; i < locals.length; i++) {
-				if (locals[i].manifest
-					&& locals[i].manifest.contributes
-					&& Array.isArray(locals[i].manifest.contributes.localizations)
-					&& locals[i].manifest.contributes.localizations.some(x => x.languageId === language)) {
-					return;
-				}
+		const ceintlExtensionSearch = this._galleryService.query({ names: [`MS-CEINTL.vscode-language-pack-${locale}`], pageSize: 1 });
+		const tagSearch = this._galleryService.query({ text: `tag:lp-${locale}`, pageSize: 1 });
+
+		TPromise.join([ceintlExtensionSearch, tagSearch]).then(([ceintlResult, tagResult]) => {
+			if (ceintlResult.total === 0 && tagResult.total === 0) {
+				return;
 			}
 
-			this._galleryService.query({ text: `tag:lp-${language}` }).then(pager => {
-				if (!pager || !pager.firstPage || !pager.firstPage.length) {
-					return;
-				}
+			const extensionToInstall = ceintlResult.total === 1 ? ceintlResult.firstPage[0] : tagResult.total === 1 ? tagResult.firstPage[0] : null;
+			const promptType = extensionToInstall ? 'install' : 'searchMarketplace';
 
-				this.notificationService.prompt(
-					Severity.Info,
-					localize('showLanguagePackExtensions', "The Marketplace has extensions that can help localizing VS Code to '{0}' locale", language),
-					[{
-						label: searchMarketplace,
-						run: () => {
-							/* __GDPR__
-								"languagePackSuggestion:popup" : {
-									"userReaction" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
-									"extensionId": { "classification": "PublicNonPersonalData", "purpose": "FeatureInsight" }
-								}
-							*/
-							this.telemetryService.publicLog('languagePackSuggestion:popup', { userReaction: 'ok', language });
-							this.viewletService.openViewlet('workbench.view.extensions', true)
-								.then(viewlet => viewlet as IExtensionsViewlet)
-								.then(viewlet => {
-									viewlet.search(`tag:lp-${language}`);
-									viewlet.focus();
-								});
-						}
-					},
-					{
-						label: choiceNever,
-						isSecondary: true,
-						run: () => {
-							languagePackSuggestionIgnoreList.push(language);
-							this.storageService.store(
-								'extensionsAssistant/languagePackSuggestionIgnore',
-								JSON.stringify(languagePackSuggestionIgnoreList),
-								StorageScope.GLOBAL
-							);
-							/* __GDPR__
-								"languagePackSuggestion:popup" : {
-									"userReaction" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
-									"extensionId": { "classification": "PublicNonPersonalData", "purpose": "FeatureInsight" }
-								}
-							*/
-							this.telemetryService.publicLog('languagePackSuggestion:popup', { userReaction: 'neverShowAgain', language });
-						}
-					}],
-					() => {
+			this.notificationService.prompt(
+				Severity.Info,
+				bundledTranslations['searchForLanguagePacks'].replace('{0}', bundledTranslations['languageName']),
+				[{
+					label: bundledTranslations[extensionToInstall ? 'install' : 'searchMarketplace'],
+					run: () => {
 						/* __GDPR__
 							"languagePackSuggestion:popup" : {
 								"userReaction" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
-								"language": { "classification": "PublicNonPersonalData", "purpose": "FeatureInsight" }
+								"language": { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+								"promptType": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
 							}
 						*/
-						this.telemetryService.publicLog('languagePackSuggestion:popup', { userReaction: 'cancelled', language });
+						this.telemetryService.publicLog('languagePackSuggestion:popup', { userReaction: 'ok', language, promptType });
+						if (extensionToInstall) {
+							this.viewletService.openViewlet(EXTENSIONS_VIEWLET_ID)
+								.then(viewlet => viewlet as IExtensionsViewlet)
+								.then(viewlet => viewlet.search(`@id:${extensionToInstall.identifier.id}`))
+								.then(() => this.extensionsService.installFromGallery(extensionToInstall))
+								.then(() => null, err => this.notificationService.error(err));
+						} else {
+							this.viewletService.openViewlet(EXTENSIONS_VIEWLET_ID, true)
+								.then(viewlet => viewlet as IExtensionsViewlet)
+								.then(viewlet => {
+									viewlet.search(`tag:lp-${locale}`);
+									viewlet.focus();
+								});
+						}
 					}
-				);
-			});
+				},
+				{
+					label: bundledTranslations['neverShowAgain'],
+					isSecondary: true,
+					run: () => {
+						languagePackSuggestionIgnoreList.push(language);
+						this.storageService.store(
+							'extensionsAssistant/languagePackSuggestionIgnore',
+							JSON.stringify(languagePackSuggestionIgnoreList),
+							StorageScope.GLOBAL
+						);
+						/* __GDPR__
+							"languagePackSuggestion:popup" : {
+								"userReaction" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+								"language": { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+								"promptType": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+							}
+						*/
+						this.telemetryService.publicLog('languagePackSuggestion:popup', { userReaction: 'neverShowAgain', language, promptType });
+					}
+				}],
+				() => {
+					/* __GDPR__
+						"languagePackSuggestion:popup" : {
+							"userReaction" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+							"language": { "classification": "PublicNonPersonalData", "purpose": "FeatureInsight" },
+							"promptType": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+						}
+					*/
+					this.telemetryService.publicLog('languagePackSuggestion:popup', { userReaction: 'cancelled', language, promptType });
+				}
+			);
 		});
 	}
 

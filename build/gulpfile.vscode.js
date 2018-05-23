@@ -282,6 +282,8 @@ function packageTask(platform, arch, opts) {
 		const productJsonStream = gulp.src(['product.json'], { base: '.' })
 			.pipe(json({ commit, date, checksums, settingsSearchBuildId }));
 
+		const minimalTranslations = gulp.src(['minimalTranslations.json'], { base: '.'});
+
 		const license = gulp.src(['LICENSES.chromium.html', 'LICENSE.txt', 'ThirdPartyNotices.txt', 'licenses/**'], { base: '.' });
 
 		const watermark = gulp.src(['resources/letterpress.svg', 'resources/letterpress-dark.svg', 'resources/letterpress-hc.svg'], { base: '.' });
@@ -320,7 +322,8 @@ function packageTask(platform, arch, opts) {
 			watermark,
 			api,
 			sources,
-			deps
+			deps,
+			minimalTranslations
 		);
 
 		if (platform === 'win32') {
